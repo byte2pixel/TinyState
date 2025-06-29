@@ -1,5 +1,7 @@
 # TinyState
 
+[![NuGet](https://img.shields.io/nuget/v/Byte2Pixel.TinyState.svg)](https://www.nuget.org/packages/Byte2Pixel.TinyState)
+[![GitHub release](https://img.shields.io/github/v/release/Byte2Pixel/TinyState)](https://github.com/Byte2Pixel/TinyState/releases)
 [![Build Status](https://github.com/Byte2Pixel/TinyState/actions/workflows/dotnet.yaml/badge.svg)](https://github.com/Byte2Pixel/TinyState/actions)
 
 > **⚠️ This package is under active development and is not ready for use. Contributions are not being accepted at this time.**
