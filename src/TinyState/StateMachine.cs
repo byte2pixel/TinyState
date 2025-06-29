@@ -64,7 +64,8 @@ public class StateMachine<TState, TTrigger> where TState : notnull where TTrigge
     public class StateConfiguration
     {
         private readonly Dictionary<TTrigger, TState> _transitions = new();
-        private TTrigger? _currentTrigger;
+        private TTrigger? _currentTrigger; // Will never be null due to the type constraint but isn't initialized until When() is called.
+        private bool _hasCurrentTrigger;
 
         /// <summary>
         /// Specifies the trigger that will cause the transition.
@@ -73,8 +74,8 @@ public class StateMachine<TState, TTrigger> where TState : notnull where TTrigge
         /// <returns>The current state configuration instance.</returns>
         public StateConfiguration When(TTrigger trigger)
         {
-            // Store the current trigger
             _currentTrigger = trigger;
+            _hasCurrentTrigger = true;
             return this;
         }
 
@@ -88,13 +89,12 @@ public class StateMachine<TState, TTrigger> where TState : notnull where TTrigge
         /// </exception>
         public StateConfiguration GoTo(TState targetState)
         {
-            // Store transition target
-            if (_currentTrigger is null)
+            if (!_hasCurrentTrigger || _currentTrigger is null)
             {
                 throw new InvalidOperationException("You must call When() before GoTo().");
             }
             _transitions[_currentTrigger] = targetState;
-            _currentTrigger = default;
+            _hasCurrentTrigger = false;
             return this;
         }
 
