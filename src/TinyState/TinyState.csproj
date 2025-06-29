@@ -10,7 +10,7 @@
     <Company>Byte2Pixel</Company>
     <Product>TinyState</Product>
     <Title>TinyState</Title>
-    <Description>A fluent and minimalistic state management library for .NET applications.</Description>
+    <Description>A fluent and minimalistic state machine library for .NET applications.</Description>
     <PackageTags>state, state machine, state management, fluent API, minimalistic, .NET</PackageTags>
     <RepositoryUrl>https://www.github.com/Byte2Pixel/TinyState</RepositoryUrl>
     <PackageProjectUrl>https://www.github.com/Byte2Pixel/TinyState</PackageProjectUrl>
