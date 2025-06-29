@@ -4,6 +4,27 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>Byte2Pixel.TinyState</PackageId>
+    <Version>0.0.1-alpha</Version>
+    <Authors>Mel Dommer</Authors>
+    <Company>Byte2Pixel</Company>
+    <Product>TinyState</Product>
+    <Title>TinyState</Title>
+    <Description>A fluent and minimalistic state management library for .NET applications.</Description>
+    <PackageTags>state, state machine, state management, fluent API, minimalistic, .NET</PackageTags>
+    <RepositoryUrl>https://www.github.com/Byte2Pixel/TinyState</RepositoryUrl>
+    <PackageProjectUrl>https://www.github.com/Byte2Pixel/TinyState</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright> © 2025 Byte2Pixel. All rights reserved.</Copyright>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../icon.png" Pack="true" PackagePath="" />
+    <None Include="../../README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
 
 </Project>
