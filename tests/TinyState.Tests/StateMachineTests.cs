@@ -1,5 +1,3 @@
-using TUnit.Assertions.AssertConditions.Throws;
-
 namespace TinyState.Tests;
 
 public enum States
