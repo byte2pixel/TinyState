@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TinyState;
 
 /// <summary>
@@ -72,7 +74,10 @@ public class StateMachine<TState, TTrigger>
         if (!_configurations.TryGetValue(State, out StateConfiguration? config))
             throw new InvalidOperationException($"No configuration found for state '{State}'");
 
-        (TState nextState, StateConfiguration toConfig) = await SelectTransitionAsync(config, trigger);
+        (TState nextState, StateConfiguration toConfig) = await SelectTransitionAsync(
+            config,
+            trigger
+        );
 
         _isTransitioning = true;
         try
@@ -100,26 +105,34 @@ public class StateMachine<TState, TTrigger>
         }
     }
 
-    private async Task<(TState nextState, StateConfiguration toConfig)> SelectTransitionAsync(StateConfiguration config,
-        TTrigger trigger)
+    private async Task<(TState nextState, StateConfiguration toConfig)> SelectTransitionAsync(
+        StateConfiguration config,
+        TTrigger trigger
+    )
     {
         Exception? guardException = null;
-        foreach ((var guard, var guardAsync, TState targetState) in config.GetTransitionsForTrigger(trigger))
+        foreach (
+            (var guards, var guardsAsync, TState targetState) in config.GetTransitionsForTrigger(
+                trigger
+            )
+        )
         {
             try
             {
-                if (guardAsync != null)
-                {
-                    if (!await guardAsync()) continue;
-                    if (!_configurations.TryGetValue(targetState, out var toConfig))
-                        throw new InvalidOperationException($"No configuration found for target state '{targetState}'");
-                    return (targetState, toConfig);
-                }
+                if (!_configurations.TryGetValue(targetState, out StateConfiguration? toConfig))
+                    continue;
 
-                if (guard != null && !guard()) continue;
-                if (!_configurations.TryGetValue(targetState, out var toConfig2))
-                    throw new InvalidOperationException($"No configuration found for target state '{targetState}'");
-                return (targetState, toConfig2);
+                bool allAsyncPassed =
+                    guardsAsync.Count == 0
+                    || (await Task.WhenAll(guardsAsync.Select(g => g()))).All(result => result);
+                if (!allAsyncPassed)
+                    continue;
+
+                bool allSyncPassed = guards.Count == 0 || guards.All(g => g());
+                if (!allSyncPassed)
+                    continue;
+
+                return (targetState, toConfig);
             }
             catch (Exception ex)
             {
@@ -128,27 +141,62 @@ public class StateMachine<TState, TTrigger>
             }
         }
 
-        if (guardException is not null) throw guardException;
+        if (guardException is not null)
+            throw guardException;
         throw new InvalidOperationException(
-            $"No transition from '{State}' via '{trigger}' (all guards failed or none present).");
+            $"No transition from '{State}' via '{trigger}' (all guards failed or none present)."
+        );
+    }
+
+    /// <summary>
+    /// Builder stage: after Trigger, allows When/WhenAsync/TransitionTo.
+    /// </summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedMethodReturnValue.Global",
+        Justification = "Used for fluent API chaining"
+    )]
+    public interface IGuardOrTransitionStage
+    {
+        IGuardOrTransitionStage When(Func<bool> guard);
+        IGuardOrTransitionStage WhenAsync(Func<Task<bool>> guardAsync);
+        IAfterTransitionStage TransitionTo(TState targetState);
+    }
+
+    /// <summary>
+    /// Builder stage: after TransitionTo, only allows Trigger or hooks.
+    /// </summary>
+    [SuppressMessage(
+        "ReSharper",
+        "UnusedMemberInSuper.Global",
+        Justification = "Used for fluent API chaining"
+    )]
+    public interface IAfterTransitionStage
+    {
+        IGuardOrTransitionStage Trigger(TTrigger trigger);
+        StateConfiguration OnEnter(Action action);
+        StateConfiguration OnEnterAsync(Func<Task> action);
+        StateConfiguration OnExit(Action action);
+        StateConfiguration OnExitAsync(Func<Task> action);
+        StateConfiguration OnTransition(Action<TTrigger, TState> action);
+        StateConfiguration OnTransitionAsync(Func<TTrigger, TState, Task> action);
     }
 
     /// <summary>
     /// Configures the state-specific behavior, including transitions, entry, and exit actions.
     /// </summary>
-    public class StateConfiguration
+    public class StateConfiguration : IGuardOrTransitionStage, IAfterTransitionStage
     {
         private sealed class TransitionInfo
         {
-            public Func<bool>? Guard;
-            public Func<Task<bool>>? GuardAsync;
-            public TState TargetState = default!;
+            public readonly List<Func<bool>> Guards = [];
+            public readonly List<Func<Task<bool>>> GuardsAsync = [];
+            public TState? TargetState;
         }
 
         private readonly Dictionary<TTrigger, TransitionInfo> _transitions = new();
         private TTrigger? _currentTrigger;
         private TransitionInfo? _currentTransition;
-        private bool _hasCurrentTrigger;
 
         internal Action? OnEnterAction;
         internal Func<Task>? OnEnterActionAsync;
@@ -158,111 +206,135 @@ public class StateMachine<TState, TTrigger>
         internal Func<TTrigger, TState, Task>? OnTransitionActionAsync;
 
         /// <summary>
-        /// Specifies the trigger that will cause the transition.
+        /// Begins configuration for a new trigger on this state.
         /// </summary>
-        /// <param name="trigger">The trigger to specify.</param>
-        /// <returns>The current state configuration instance.</returns>
-        public StateConfiguration Trigger(TTrigger trigger)
+        /// <param name="trigger">The trigger to configure.</param>
+        /// <returns>The builder for further configuration.</returns>
+        public IGuardOrTransitionStage Trigger(TTrigger trigger)
         {
             _currentTrigger = trigger;
-            _hasCurrentTrigger = true;
             _currentTransition = new TransitionInfo();
             _transitions[trigger] = _currentTransition;
             return this;
         }
 
         /// <summary>
-        /// Specifies the guard condition that must be satisfied for the transition to occur.
+        /// Adds a synchronous guard condition for the current trigger. Multiple guards can be chained; all must pass.
         /// </summary>
-        /// <param name="guard">The synchronous guard condition.</param>
-        /// <returns>The current state configuration instance.</returns>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown if Trigger() was not called before calling When().
-        /// </exception>
-        public StateConfiguration When(Func<bool> guard)
+        /// <param name="guard">A synchronous guard function returning true to allow the transition.</param>
+        /// <returns>The builder for further configuration.</returns>
+        public IGuardOrTransitionStage When(Func<bool> guard)
         {
             if (_currentTransition is null)
                 throw new InvalidOperationException("You must call Trigger() before When().");
-            _currentTransition.Guard = guard;
+            _currentTransition.Guards.Add(guard);
             return this;
         }
 
         /// <summary>
-        /// Specifies the asynchronous guard condition that must be satisfied for the transition to occur.
+        /// Adds an asynchronous guard condition for the current trigger. Multiple guards can be chained; all must pass.
         /// </summary>
-        /// <param name="guardAsync">The asynchronous guard condition.</param>
-        /// <returns>The current state configuration instance.</returns>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown if Trigger() was not called before calling WhenAsync().
-        /// </exception>
-        public StateConfiguration WhenAsync(Func<Task<bool>> guardAsync)
+        /// <param name="guardAsync">An asynchronous guard function returning true to allow the transition.</param>
+        /// <returns>The builder for further configuration.</returns>
+        public IGuardOrTransitionStage WhenAsync(Func<Task<bool>> guardAsync)
         {
             if (_currentTransition is null)
                 throw new InvalidOperationException("You must call Trigger() before WhenAsync().");
-            _currentTransition.GuardAsync = guardAsync;
+            _currentTransition.GuardsAsync.Add(guardAsync);
             return this;
         }
 
         /// <summary>
-        /// Specifies the target state for the transition.
+        /// Sets the target state for the current trigger. Ends the guard chain for this trigger.
         /// </summary>
-        /// <param name="targetState">The target state to transition to.</param>
-        /// <returns>The current state configuration instance.</returns>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown if When() was not called before calling GoTo().
-        /// </exception>
-        public StateConfiguration TransitionTo(TState targetState)
+        /// <param name="targetState">The state to transition to if all guards pass.</param>
+        /// <returns>The builder for further configuration (new trigger or hooks).</returns>
+        public IAfterTransitionStage TransitionTo(TState targetState)
         {
-            if (!_hasCurrentTrigger || _currentTrigger is null || _currentTransition is null)
+            if (_currentTransition is null || _currentTrigger is null)
                 throw new InvalidOperationException(
                     "You must call Trigger() before TransitionTo()."
                 );
             _currentTransition.TargetState = targetState;
-            _hasCurrentTrigger = false;
+            // After TransitionTo, prevent further When/WhenAsync for this trigger
             _currentTransition = null;
+            _currentTrigger = default;
             return this;
         }
 
         internal IEnumerable<(
-            Func<bool>? guard,
-            Func<Task<bool>>? guardAsync,
+            List<Func<bool>> guards,
+            List<Func<Task<bool>>> guardsAsync,
             TState targetState
-            )> GetTransitionsForTrigger(TTrigger trigger)
+        )> GetTransitionsForTrigger(TTrigger trigger)
         {
-            if (_transitions.TryGetValue(trigger, out var t))
-                yield return (t.Guard, t.GuardAsync, t.TargetState);
+            if (
+                _transitions.TryGetValue(trigger, out TransitionInfo? t)
+                && t.TargetState is not null
+            )
+                yield return (t.Guards, t.GuardsAsync, t.TargetState);
         }
 
+        /// <summary>
+        /// Registers an action to be called when entering this state.
+        /// </summary>
+        /// <param name="action">The action to call on entry.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnEnter(Action action)
         {
             OnEnterAction = action;
             return this;
         }
 
+        /// <summary>
+        /// Registers an asynchronous action to be called when entering this state.
+        /// </summary>
+        /// <param name="action">The async action to call on entry.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnEnterAsync(Func<Task> action)
         {
             OnEnterActionAsync = action;
             return this;
         }
 
+        /// <summary>
+        /// Registers an action to be called when exiting this state.
+        /// </summary>
+        /// <param name="action">The action to call on exit.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnExit(Action action)
         {
             OnExitAction = action;
             return this;
         }
 
+        /// <summary>
+        /// Registers an asynchronous action to be called when exiting this state.
+        /// </summary>
+        /// <param name="action">The async action to call on exit.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnExitAsync(Func<Task> action)
         {
             OnExitActionAsync = action;
             return this;
         }
 
+        /// <summary>
+        /// Registers an action to be called when a transition occurs from this state.
+        /// </summary>
+        /// <param name="action">The action to call on transition.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnTransition(Action<TTrigger, TState> action)
         {
             OnTransitionAction = action;
             return this;
         }
 
+        /// <summary>
+        /// Registers an asynchronous action to be called when a transition occurs from this state.
+        /// </summary>
+        /// <param name="action">The async action to call on transition.</param>
+        /// <returns>The state configuration for chaining.</returns>
         public StateConfiguration OnTransitionAsync(Func<TTrigger, TState, Task> action)
         {
             OnTransitionActionAsync = action;

@@ -23,7 +23,10 @@ public class StateMachineTests
     public async Task StateMachine_BasicTransition_Works()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
 # pragma warning disable S6966
@@ -38,10 +41,16 @@ public class StateMachineTests
     public async Task StateMachine_ReConfigureState_Works()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         // reconfigure Start + StartProcessing to go to Completed
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Completed);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Completed);
         machine.Configure(States.Completed);
         await machine.FireAsync(Triggers.StartProcessing);
         await Assert.That(machine.State).IsEqualTo(States.Completed);
@@ -51,8 +60,14 @@ public class StateMachineTests
     public async Task StateMachine_MultipleTransitions_Works()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
-        machine.Configure(States.Processing).Trigger(Triggers.StartProcessing).TransitionTo(States.Start);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
+        machine
+            .Configure(States.Processing)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Start);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await machine.FireAsync(Triggers.StartProcessing);
@@ -65,7 +80,10 @@ public class StateMachineTests
     public async Task StateMachine_BasicTransition_FireAsync_Works()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await machine.FireAsync(Triggers.StartProcessing);
@@ -78,21 +96,22 @@ public class StateMachineTests
         var machine = new StateMachine<States, Triggers>(States.Start);
         machine
             .Configure(States.Start)
-            .Trigger(Triggers.StartProcessing)
-            .TransitionTo(States.Processing)
-            .OnExit(() => HookCalls.Add("exit:start"))
             .OnExitAsync(async () =>
             {
                 await Task.Delay(1);
                 HookCalls.Add("exitAsync:start");
             })
+            .OnExit(() => HookCalls.Add("exit:start"))
             .OnTransition((tr, st) => HookCalls.Add($"transition:{tr}->{st}"))
-            .OnTransitionAsync(async (tr, st) =>
+            .OnTransitionAsync(
+                async (tr, st) =>
                 {
                     await Task.Delay(1);
                     HookCalls.Add($"transitionAsync:{tr}->{st}");
                 }
-            );
+            )
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         machine
             .Configure(States.Processing)
             .OnEnter(() => HookCalls.Add("enter:processing"))
@@ -122,7 +141,8 @@ public class StateMachineTests
     public async Task StateMachine_When_Guard_True_Allows_Transition()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start)
+        machine
+            .Configure(States.Start)
             .Trigger(Triggers.StartProcessing)
             .When(() => true)
             .TransitionTo(States.Processing);
@@ -136,7 +156,8 @@ public class StateMachineTests
     public async Task StateMachine_WhenAsync_Guard_True_Allows_Transition()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start)
+        machine
+            .Configure(States.Start)
             .Trigger(Triggers.StartProcessing)
             .WhenAsync(async () =>
             {
@@ -166,7 +187,10 @@ public class StateMachineTests
     public async Task StateMachine_Throws_If_NoTransitionForTrigger()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.CompleteProcessing).TransitionTo(States.Completed);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.CompleteProcessing)
+            .TransitionTo(States.Completed);
         await Assert.That(() => machine.Fire(Triggers.StartProcessing)).ThrowsException();
     }
 
@@ -174,7 +198,10 @@ public class StateMachineTests
     public async Task StateMachine_RepeatedTrigger_Throws()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await machine.FireAsync(Triggers.StartProcessing);
@@ -195,7 +222,10 @@ public class StateMachineTests
     public async Task StateMachine_Throws_If_TargetState_NotConfigured1()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start).Trigger(Triggers.StartProcessing).TransitionTo(States.Processing);
+        machine
+            .Configure(States.Start)
+            .Trigger(Triggers.StartProcessing)
+            .TransitionTo(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await Assert
             .That(async () => await machine.FireAsync(Triggers.StartProcessing))
@@ -208,9 +238,9 @@ public class StateMachineTests
         var machine = new StateMachine<States, Triggers>(States.Start);
         machine
             .Configure(States.Start)
+            .OnExit(() => throw new InvalidOperationException("Hook failed!"))
             .Trigger(Triggers.StartProcessing)
-            .TransitionTo(States.Processing)
-            .OnExit(() => throw new InvalidOperationException("Hook failed!"));
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await Assert
@@ -226,9 +256,9 @@ public class StateMachineTests
         var machine = new StateMachine<States, Triggers>(States.Start);
         machine
             .Configure(States.Start)
+            .OnExit(() => machine.Fire(Triggers.StartProcessing))
             .Trigger(Triggers.StartProcessing)
-            .TransitionTo(States.Processing)
-            .OnExit(() => machine.Fire(Triggers.StartProcessing));
+            .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
         await Assert
@@ -244,13 +274,16 @@ public class StateMachineTests
     public async Task StateMachine_When_Guard_False_Blocks_Transition()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start)
+        machine
+            .Configure(States.Start)
             .Trigger(Triggers.StartProcessing)
             .When(() => false)
             .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
-        await Assert.That(async () => await machine.FireAsync(Triggers.StartProcessing)).ThrowsException();
+        await Assert
+            .That(async () => await machine.FireAsync(Triggers.StartProcessing))
+            .ThrowsException();
         await Assert.That(machine.State).IsEqualTo(States.Start);
     }
 
@@ -258,7 +291,8 @@ public class StateMachineTests
     public async Task StateMachine_WhenAsync_Guard_False_Blocks_Transition()
     {
         var machine = new StateMachine<States, Triggers>(States.Start);
-        machine.Configure(States.Start)
+        machine
+            .Configure(States.Start)
             .Trigger(Triggers.StartProcessing)
             .WhenAsync(async () =>
             {
@@ -268,7 +302,9 @@ public class StateMachineTests
             .TransitionTo(States.Processing);
         machine.Configure(States.Processing);
         await Assert.That(machine.State).IsEqualTo(States.Start);
-        await Assert.That(async () => await machine.FireAsync(Triggers.StartProcessing)).ThrowsException();
+        await Assert
+            .That(async () => await machine.FireAsync(Triggers.StartProcessing))
+            .ThrowsException();
         await Assert.That(machine.State).IsEqualTo(States.Start);
     }
 
